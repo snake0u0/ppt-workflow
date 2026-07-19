@@ -85,6 +85,7 @@ npm run new -- <slug> [theme]
 
 ```
 presentations/<slug>/
+  DRAFT.md       # 슬라이드 내용 초안 (marp 형식) - index.html 빌드의 원본
   index.html     # 발표 본체 (테마 토큰 var(--bg/--ink/--accent/--font-*) 사용)
   meta.json      # { title, date, event, theme }
   assets/        # 이 발표 전용 이미지 등 (선택)
