@@ -43,9 +43,10 @@ const fills = {
   __EVENT__: DEFAULT_EVENT,
 };
 
-for (const file of ["index.html", "meta.json"]) {
+for (const file of ["index.html", "meta.json", "DRAFT.md"]) {
   const p = join(target, file);
-  let s = await readFile(p, "utf8");
+  let s = await readFile(p, "utf8").catch(() => null);
+  if (s === null) continue; // 템플릿에 해당 파일이 없으면 건너뜀
   for (const [k, v] of Object.entries(fills)) s = s.replaceAll(k, v);
   await writeFile(p, s, "utf8");
 }
