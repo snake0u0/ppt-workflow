@@ -1,0 +1,50 @@
+/* 모든 덱 공통 인쇄 규칙 — 뷰어가 <link media="print"> 로 자동 주입.
+   "슬라이드 1장 = 16:9 한 페이지". #stage/#deck/.slide 컨벤션 기준. */
+@media print {
+  /* 용지를 16:9(1280x720px = 13.33in x 7.5in)로 고정 → 여백/잘림 없음 */
+  @page {
+    size: 1280px 720px;
+    margin: 0;
+  }
+
+  html,
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    overflow: visible !important;
+    background: #fff !important;
+  }
+
+  /* 화면용 scale / 가운데 정렬 해제 */
+  #stage {
+    position: static !important;
+    display: block !important;
+    inset: auto !important;
+    place-items: initial !important;
+  }
+  #deck {
+    transform: none !important;
+    width: 1280px !important;
+    height: auto !important;
+  }
+
+  /* 모든 슬라이드를 한 장씩 페이지로 펼침 */
+  .slide {
+    position: relative !important;
+    display: flex !important;
+    width: 1280px !important;
+    height: 720px !important;
+    overflow: hidden;
+    break-after: page;
+    page-break-after: always;
+    break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .slide:last-child {
+    break-after: auto;
+    page-break-after: auto;
+  }
+}

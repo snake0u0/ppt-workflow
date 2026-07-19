@@ -1,0 +1,30 @@
+{
+  "name": "ppt-workflow",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "gen": "node scripts/gen-fonts.mjs && node scripts/gen-themes.mjs",
+    "predev": "npm run gen",
+    "dev": "next dev",
+    "prebuild": "npm run gen && node scripts/gen-decks.mjs",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "new": "node scripts/new-deck.mjs",
+    "gen-thumbs": "node scripts/gen-thumbs.mjs"
+  },
+  "dependencies": {
+    "marked": "^15.0.12",
+    "next": "16.2.9",
+    "react": "19.2.4",
+    "react-dom": "19.2.4"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "16.2.9",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>__TITLE__</title>
+    <!--
+      공용 폰트(fonts.css)는 뷰어가 자동 주입합니다.
+      테마 CSS 는 아래 한 줄로 연결됩니다. (npm run new <slug> <theme> 가 __THEME__ 를 채움)
+      사용 가능 표준 토큰: --bg --surface --ink --ink-mute --accent --on-accent --font-display --font-body
+    -->
+    <link rel="stylesheet" href="/shared/themes/__THEME__.css" />
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; background: #0b0b0c; overflow: hidden; }
+
+      /* 16:9 논리 캔버스(1280x720) → 화면/용지에 맞춰 scale */
+      #stage { position: fixed; inset: 0; display: grid; place-items: center; }
+      #deck { width: 1280px; height: 720px; position: relative; transform-origin: center center; }
+
+      .slide {
+        position: absolute;
+        inset: 0;
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        padding: 88px;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: var(--font-body);
+      }
+      .slide.active { display: flex; }
+
+      h1, h2 { font-family: var(--font-display); letter-spacing: -0.02em; line-height: 1.05; }
+      h1 { font-size: 80px; font-weight: 800; }
+      h2 { font-size: 44px; font-weight: 700; margin-bottom: 20px; }
+      p { font-size: 26px; line-height: 1.5; color: var(--ink-mute); }
+
+      .rule { width: 64px; height: 8px; background: var(--accent); margin: 22px 0 28px; }
+      .chip {
+        display: inline-block;
+        background: var(--accent);
+        color: var(--on-accent);
+        font-family: var(--font-display);
+        font-weight: 700;
+        font-size: 18px;
+        padding: 6px 14px;
+        border-radius: 999px;
+      }
+      .pageno { position: absolute; right: 44px; bottom: 32px; font-size: 16px; color: var(--ink-mute); }
+
+      /* PDF 인쇄 규칙(16:9=1페이지)은 뷰어가 /deck-print.css 로 자동 주입한다. */
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="deck">
+        <!-- 슬라이드 1: 표지 -->
+        <section class="slide active">
+          <span class="chip">발표</span>
+          <h1 style="margin-top: 24px">__TITLE__</h1>
+          <div class="rule"></div>
+          <p>부제목 · 발표자 · 날짜를 여기에</p>
+          <div class="pageno">1</div>
+        </section>
+
+        <!-- 슬라이드 2: 내용 예시 (테마 토큰 사용) -->
+        <section class="slide">
+          <h2>슬라이드 제목</h2>
+          <div class="rule"></div>
+          <p>
+            본문은 var(--font-body), 강조는
+            <b style="color: var(--accent)">var(--accent)</b> 로.<br />
+            테마를 바꾸면 색·폰트가 자동으로 바뀝니다.
+          </p>
+          <div class="pageno">2</div>
+        </section>
+      </div>
+    </div>
+
+    <script>
+      (function () {
+        var deck = document.getElementById("deck");
+        var slides = [].slice.call(deck.querySelectorAll(".slide"));
+        var i = 0;
+        function show(n) {
+          i = Math.max(0, Math.min(slides.length - 1, n));
+          slides.forEach(function (s, idx) {
+            s.classList.toggle("active", idx === i);
+          });
+        }
+        function fit() {
+          var s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+          deck.style.transform = "scale(" + s + ")";
+        }
+        window.addEventListener("resize", fit);
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "ArrowRight" || e.key === "PageDown") show(i + 1);
+          else if (e.key === "ArrowLeft" || e.key === "PageUp") show(i - 1);
+        });
+        document.addEventListener("click", function () { show(i + 1); });
+        fit();
+        show(0);
+      })();
+    </script>
+  </body>
+</html>
