@@ -23,12 +23,15 @@ const CHROME_CANDIDATES = [
 
 async function readEnvLocal() {
   const env = {};
-  try {
-    for (const line of (await readFile(".env.local", "utf8")).split("\n")) {
-      const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.*)\s*$/);
-      if (m) env[m[1]] = m[2];
-    }
-  } catch {}
+  // .env.local 이 먼저, 없으면 .env (리포에 따라 둘 중 하나만 있다)
+  for (const file of [".env.local", ".env"]) {
+    try {
+      for (const line of (await readFile(file, "utf8")).split("\n")) {
+        const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.*)\s*$/);
+        if (m && !(m[1] in env)) env[m[1]] = m[2];
+      }
+    } catch {}
+  }
   return env;
 }
 
@@ -46,7 +49,7 @@ function pickChrome() {
 
 async function main() {
   const { SITE_ID, SITE_PASSWORD } = await readEnvLocal();
-  if (!SITE_ID || !SITE_PASSWORD) throw new Error(".env.local 에 SITE_ID/SITE_PASSWORD 필요");
+  if (!SITE_ID || !SITE_PASSWORD) throw new Error(".env.local 또는 .env 에 SITE_ID/SITE_PASSWORD 필요");
 
   // 로그인 → 쿠키
   const jar = join(mkdtempSync(join(tmpdir(), "thumb-")), "jar");

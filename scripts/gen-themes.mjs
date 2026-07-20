@@ -36,6 +36,20 @@ const THEMES = {
     font: "'Inter', 'Pretendard', system-ui, sans-serif",
     canon: { bg: "canvas", surface: "canvas-elevated", ink: "ink", "ink-mute": "muted", accent: "primary", "on-accent": "on-primary" },
   },
+  nintendo: {
+    font: "Arial, 'Helvetica Neue', 'Pretendard', 'Apple SD Gothic Neo', sans-serif",
+    canon: { bg: "canvas", surface: "surface", ink: "ink", "ink-mute": "ink-soft", accent: "signal", "on-accent": "on-primary" },
+  },
+  bmw: {
+    font: "'Inter', 'Pretendard', 'Apple SD Gothic Neo', sans-serif",
+    canon: { bg: "canvas", surface: "surface-card", ink: "on-dark", "ink-mute": "body", accent: "primary", "on-accent": "canvas" },
+  },
+  dell: {
+    // 1996 카탈로그: 본문은 세리프(Times + 한글 NotoSerifKR), 디스플레이는 Arial Black 계열
+    font: "'Times New Roman', Times, 'NotoSerifKR', serif",
+    fontDisplay: "'Arial Black', 'Helvetica Neue', Arial, 'Pretendard', sans-serif",
+    canon: { bg: "canvas", surface: "canvas", ink: "ink", "ink-mute": "ink", accent: "primary", "on-accent": "on-primary" },
+  },
 };
 
 // 알 수 없는 가이드용 폴백
@@ -93,7 +107,8 @@ function buildCss(name, md) {
   }
 
   const font = cfg?.font ?? "'Pretendard', system-ui, sans-serif";
-  css += `  --font-display: ${font};\n  --font-body: ${font};\n`;
+  const fontDisplay = cfg?.fontDisplay ?? font; // 디스플레이/본문 폰트가 다른 테마(dell)용
+  css += `  --font-display: ${fontDisplay};\n  --font-body: ${font};\n`;
   css += `}\n`;
   return css;
 }
