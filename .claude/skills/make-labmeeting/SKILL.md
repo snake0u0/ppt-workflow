@@ -10,7 +10,7 @@ description: >-
   standard shortcut for the recurring lab-meeting build workflow in this repo.
   For a deck in a different design system, use the matching /make-<theme> skill
   (make-ferrari, make-white-navy, make-supabase, make-lime-green,
-  make-inventory) instead.
+  make-inventory, make-nintendo, make-dell) instead.
 ---
 
 # make-labmeeting

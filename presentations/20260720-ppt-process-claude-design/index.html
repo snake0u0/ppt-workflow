@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>AI를 활용한 발표자료 제작 워크플로우</title>
+    <!-- Claude Design "Broadsheet" 테마를 이 프로젝트 규약으로 옮긴 덱.
+         원본은 React+Babel 런타임(unpkg CDN)에 의존했으나 정적 HTML 로 변환했다.
+         폰트/인쇄/라이트박스/네비게이션은 뷰어가 자동 주입한다. -->
+    <style>
+      /* Broadsheet 토큰 — 이 덱이 실제로 쓰는 것만 인라인 (design-guide 없음) */
+      :root {
+        --color-bg: #f3f2f2;
+        --color-text: #201e1d;
+        --color-accent: #0088b0;
+        --color-accent-700: #006786;
+        --radius-md: 2px;
+        /* Source Serif 4 는 한글 글리프가 없어 그대로 쓰면 한글이 시스템 폰트로 떨어진다.
+           같은 계열의 한글 세리프(Noto Serif KR = Source Han Serif)를 앞에 둔다. */
+        --font-heading: 'NotoSerifKR', 'Pretendard', Georgia, serif;
+        --font-body: 'NotoSerifKR', 'Pretendard', Georgia, serif;
+      }
+
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      html, body { height: 100%; background: #0b0b0c; overflow: hidden; }
+
+      /* 16:9 논리 캔버스(1280x720) → 화면/용지에 맞춰 scale.
+         Claude Design 원본은 1920x1080 으로 조판되어 있으므로, 슬라이드 상자는
+         1280x720 으로 두고 내부 판(.dc-stage)만 2/3 로 축소해 원본 수치를 보존한다. */
+      #stage { position: fixed; inset: 0; display: grid; place-items: center; }
+      #deck { width: 1280px; height: 720px; position: relative; transform-origin: center center; }
+
+      .slide { position: absolute; inset: 0; display: none; overflow: hidden; background: var(--color-bg); }
+      .slide.active { display: block; }
+      .dc-stage {
+        width: 1920px; height: 1080px; flex: none;
+        transform: scale(0.6666667); transform-origin: top left;
+      }
+      /* flex 아이템의 기본 min-height/​width 는 auto 라 콘텐츠보다 작아지지 못한다.
+         원본은 이미지 행에 min-height:0 을 빠뜨린 곳이 있어 height:100% 이미지가
+         자연 크기로 부풀며 슬라이드를 넘쳤다(5·8번). 0 으로 풀어 행이 부모에 맞게 줄게 한다. */
+      .dc-stage div { min-height: 0; min-width: 0; }
+      /* 한 행에 늘어놓은 그림들: 원본은 img 에 width:100% 를 줘서 각 칸이 행 전체
+         너비를 요구했고, 그림 수가 늘수록 행 밖으로 밀려났다(5·8번). 폭은 flex 가
+         정하게 하고 object-fit:contain 이 비율을 지킨다 → 균등 분할. */
+      .imgrow > img { flex: 1 1 0; width: 0; min-width: 0; height: 100%; object-fit: contain; }
+
+      a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 3px; }
+      a:hover { color: var(--color-accent-700); }
+
+      /* ===== Broadsheet 슬라이드 컴포넌트 (원본 helmet <style> 그대로) ===== */
+      .bs-slide { background: var(--color-bg); color: var(--color-text); font-family: var(--font-body); padding: 90px 120px; display: flex; flex-direction: column; position: relative; }
+      .bs-title { font-family: var(--font-heading); font-weight: 700; font-size: 58px; line-height: 1.15; letter-spacing: -0.01em; margin: 0 0 46px; }
+      .bs-label { font-family: var(--font-heading); font-weight: 700; font-size: 29px; margin: 0 0 20px; }
+      .bs-bullets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 20px; }
+      .bs-bullets li { font-size: 25px; line-height: 1.5; text-indent: -0.6em; padding-left: 0.6em; }
+      .bs-note { font-size: 22px; line-height: 1.5; }
+      .bs-arrow { font-family: var(--font-heading); font-style: italic; font-weight: 400; color: var(--color-accent-700); }
+
+      /* ===== ※ 각주 — 슬라이드 맨 아래, 위에 얇은 hairline (테마 무관 규칙) ===== */
+      .bs-foot { font-size: 18px; line-height: 1.55; color: color-mix(in srgb, var(--color-text) 55%, transparent); text-indent: -1em; padding-left: 1em; margin: 0; }
+      .bs-footnotes { margin-top: auto; padding-top: 14px; display: flex; flex-direction: column; gap: 6px; }
+      .bs-footnotes::before { content: ""; display: block; width: 46%; height: 1px; background: color-mix(in srgb, var(--color-text) 22%, transparent); margin-bottom: 12px; }
+
+      /* DeepONet 설정 전환 버튼 */
+      #don-btns button {
+        appearance: none; background: none; border: 0; padding: 0; text-align: left;
+        cursor: pointer; font-family: var(--font-heading); font-size: 25px; font-weight: 400;
+        color: var(--color-text); transition: color .12s ease;
+      }
+      #don-btns button:hover { color: var(--color-accent-700); }
+      #don-btns button.on { font-weight: 700; color: var(--color-accent); }
+
+      /* 인쇄: 각 슬라이드를 한 페이지로 (deck-print.css 가 .slide 를 1280x720 으로 고정) */
+      @media print { .slide { background: var(--color-bg) !important; } }
+    </style>
+  </head>
+  <body>
+    <div id="stage">
+      <div id="deck">
+<section class="slide" data-label="01 표지">
+<div class="dc-stage bs-slide" style="justify-content:flex-start;padding-top:220px;">
+  <div style="display:flex;flex-direction:column;gap:44px;">
+    <div style="font-size:26px;letter-spacing:0.04em;color:color-mix(in srgb, var(--color-text) 55%, transparent);">2026-07-20</div>
+    <h1 style="font-family:var(--font-heading);font-weight:700;font-size:118px;line-height:1.12;letter-spacing:-0.02em;margin:0;">AI를 활용한<br>발표자료 제작 워크플로우</h1>
+  </div>
+  <div style="position:absolute;left:120px;right:120px;bottom:90px;display:flex;align-items:baseline;gap:20px;font-size:26px;color:color-mix(in srgb, var(--color-text) 55%, transparent);">
+    <span>전북대학교 산업정보시스템공학과</span><span>·</span><span>김도형</span>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="02 목차">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">목차</h2>
+  <div style="display:flex;flex-direction:column;max-width:1100px;gap:34px;font-size:38px;">
+    <div style="display:flex;align-items:baseline;gap:48px;"><span style="font-size:24px;color:var(--color-accent);">01</span><span>배경</span></div>
+    <div style="display:flex;align-items:baseline;gap:48px;"><span style="font-size:24px;color:var(--color-accent);">02</span><span>실험</span></div>
+    <div style="display:flex;align-items:baseline;gap:48px;"><span style="font-size:24px;color:var(--color-accent);">03</span><span>실험 결론</span></div>
+    <div style="display:flex;align-items:baseline;gap:48px;"><span style="font-size:24px;color:var(--color-accent);">04</span><span>범용 워크플로우</span></div>
+    <div style="display:flex;align-items:baseline;gap:48px;"><span style="font-size:24px;color:var(--color-accent);">05</span><span>개인 맞춤형 워크플로우</span></div>
+    <div style="display:flex;align-items:baseline;gap:48px;"><span style="font-size:24px;color:var(--color-accent);">06</span><span>결론</span></div>
+    <div style="display:flex;align-items:baseline;gap:48px;"><span style="font-size:24px;color:var(--color-accent);">07</span><span>활용 예시</span></div>
+    <div style="display:flex;align-items:baseline;gap:48px;"><span style="font-size:24px;color:var(--color-accent);">08</span><span>Appendix</span></div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="03 배경">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">1. 배경</h2>
+  <div style="display:flex;flex-direction:column;gap:56px;">
+    <div>
+      <div class="bs-label">▣ 문제 인식</div>
+      <ul class="bs-bullets">
+        <li>주기적인 발표자료 제작, 디자인 작업에서 피로감 발생</li>
+        <li>AI Agent의 발전 및 적용사례 증가</li>
+        <li>교수님의 관심</li>
+      </ul>
+      <div class="bs-arrow" style="font-size:25px;margin-top:18px;">→ 목표 설정: AI를 활용한 발표자료 제작 워크플로우를 정립</div>
+    </div>
+    <div>
+      <div class="bs-label">▣ 하위 문제</div>
+      <ul class="bs-bullets">
+        <li>발표내용 작성 → 인간의 영역</li>
+        <li>발표자료 디자인 → AI의 영역</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="04 실험 평가기준">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">2. 실험</h2>
+  <div class="bs-label">▣ 평가기준</div>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;">
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:48px 64px;">
+      <div><h3 style="font-family:var(--font-heading);font-weight:700;font-size:30px;margin:0 0 10px;">1</h3><p style="font-size:26px;line-height:1.5;margin:0;">디자인이 괜찮은가(품질)</p></div>
+      <div><h3 style="font-family:var(--font-heading);font-weight:700;font-size:30px;margin:0 0 10px;">2</h3><p style="font-size:26px;line-height:1.5;margin:0;">수식 작성에 문제가 없는가</p></div>
+      <div><h3 style="font-family:var(--font-heading);font-weight:700;font-size:30px;margin:0 0 10px;">3</h3><p style="font-size:26px;line-height:1.5;margin:0;">수정이 용이한가</p></div>
+      <div><h3 style="font-family:var(--font-heading);font-weight:700;font-size:30px;margin:0 0 10px;">4</h3><p style="font-size:26px;line-height:1.5;margin:0;">작업 시간이 오래걸리지 않는가</p></div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="05 실험 시도목록">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">2. 실험</h2>
+  <div style="flex:1;min-height:0;display:flex;flex-direction:column;gap:48px;">
+    <div>
+      <div class="bs-label">▣ 해본 시도들 8가지)</div>
+      <p style="font-size:26px;line-height:1.7;max-width:1400px;margin:0;">1) CrewAI, 2) Claude Design, 3) Marp, 4) LaTeX Workshop, 5) Claude Code - PPT, 6) Claude Code - HTML, 7) NotebookLM, 8) Claude for PPT</p>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
+      <div class="bs-label">▣ 디자인 시스템에 참고한 PPT</div>
+      <div class="imgrow" style="display:flex;gap:24px;flex:1;">
+        <img src="./assets/referece-1.png" alt="referece-1" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+        <img src="./assets/reference-2.png" alt="reference-2" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+        <img src="./assets/reference-3.png" alt="reference-3" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+        <img src="./assets/reference-4.png" alt="reference-4" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="06 CrewAI · Claude Design">
+<div class="dc-stage bs-slide" style="padding:70px 120px;">
+  <h2 class="bs-title" style="font-size:48px;margin-bottom:24px;">2. 실험</h2>
+  <div class="bs-label" style="font-size:26px;">▣ 각 시도별 결과</div>
+  <div style="flex:1;display:flex;flex-direction:column;gap:20px;min-height:0;">
+    <p class="bs-note" style="margin:0;">1) CrewAI: 멀티에이전트 프레임워크, '논문리뷰' 발표자료에 대해 내용작성 부터 발표자료 제작까지 담당</p>
+    <p class="bs-note" style="margin:0;color:color-mix(in srgb, var(--color-text) 70%, transparent);">- 평가: 낮은 품질, 수식 작성 문제, PPT이기에 수정 용이, 30분 이상 ppt 제작 시간, 추가적인 비용 소모</p>
+    <div class="imgrow" style="display:flex;gap:20px;height:210px;">
+      <img src="./assets/crewai_1.png" alt="crewai_1" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+      <img src="./assets/crewai_2.png" alt="crewai_2" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+      <img src="./assets/crewai_3.png" alt="crewai_3" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+    </div>
+    <div style="margin-top:14px;padding-top:20px;">
+      <p class="bs-note" style="margin:0;">2) Claude Design: Claude에서 PPT 제작을 위해 내놓은 서비스</p>
+      <p class="bs-note" style="margin:8px 0 0;color:color-mix(in srgb, var(--color-text) 70%, transparent);">- 평가: 높은 품질, 수식 렌더링 일부 오류(수정 가능), 수정 비교적 용이, 오래걸리는 작업시간, 토큰 사용량 문제</p>
+      <div class="bs-arrow" style="font-size:24px;margin-top:12px;">→ 최근 이전보다 개선된 것으로 보여 앞으로 워크플로우 개인화 예정</div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="07 Marp · LaTeX">
+<div class="dc-stage bs-slide" style="padding:70px 120px;">
+  <h2 class="bs-title" style="font-size:48px;margin-bottom:24px;">2. 실험</h2>
+  <div style="flex:1;display:flex;flex-direction:column;gap:32px;min-height:0;">
+    <div>
+      <p class="bs-note" style="margin:0;">3) Marp: IDE에서 마크다운 파일 미리보기 시 16:9 슬라이드 형식으로 보게해주는 익스텐션, 테마 적용 가능</p>
+      <p class="bs-note" style="margin:8px 0 16px;color:color-mix(in srgb, var(--color-text) 70%, transparent);">- 평가: 낮은 품질, 수식 렌더링 문제 x, 수정 어려움(PDF 또는 PPT로 변환 시 변환된 개별 슬라이드들이 배경으로 인식 → PPT 내 수정 불가), 적당한 작업시간</p>
+      <div class="imgrow" style="display:flex;gap:20px;height:200px;">
+        <img src="./assets/marp-workspace.png" alt="marp-workspace" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+        <img src="./assets/marp-1.png" alt="marp-1" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+        <img src="./assets/marp-2.png" alt="marp-2" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+      </div>
+    </div>
+    <div style="padding-top:6px;">
+      <p class="bs-note" style="margin:0;">4) LaTex Workshop: VSCode에서 LaTeX 문서를 편집∙컴파일 하게 해주는 익스텐션, 테마 적용 가능</p>
+      <p class="bs-note" style="margin:8px 0 16px;color:color-mix(in srgb, var(--color-text) 70%, transparent);">- 평가: 낮은 품질, 수식 렌더링 문제 x, 수정 어려움, 적당한 작업시간, 어색한 문법</p>
+      <div class="imgrow" style="display:flex;gap:20px;height:200px;">
+        <img src="./assets/latex-workspace.png" alt="latex-workspace" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+        <img src="./assets/latex-1.png" alt="latex-1" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+        <img src="./assets/latex-2.png" alt="latex-2" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="08 Claude Code PPT · HTML">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">2. 실험</h2>
+  <div style="flex:1;display:flex;flex-direction:column;gap:36px;min-height:0;">
+    <div>
+      <p class="bs-note" style="margin:0;font-size:26px;">5) Claude Code - PPT: PPT 기본 테마에 내용 작성 후 Claude Code에게 디자인 부탁</p>
+      <p class="bs-note" style="margin:10px 0 0;font-size:26px;color:color-mix(in srgb, var(--color-text) 70%, transparent);">- 평가: 낮음 품질, 수식 렌더링 오류, 수정 용이, 긴 작업 시간, 토큰 사용량 문제</p>
+    </div>
+    <div style="padding-top:8px;flex:1;display:flex;flex-direction:column;min-height:0;">
+      <p class="bs-note" style="margin:0;font-size:26px;">6) Claude Code - HTML: 마크다운 파일에 내용 작성 후 Claude Code에게 디자인 부탁</p>
+      <p class="bs-note" style="margin:10px 0 22px;font-size:26px;color:color-mix(in srgb, var(--color-text) 70%, transparent);">- 평가: 적절한 품질, 수식 렌더링 문제 x, 수정 어려움, 적당한 작업시간</p>
+      <div class="imgrow" style="display:flex;gap:24px;flex:1;">
+        <img src="./assets/claude-code-html-1.png" alt="claude-code-html-1" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+        <img src="./assets/claude-code-html-2.png" alt="claude-code-html-2" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="09 NotebookLM · Claude for PPT">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">2. 실험</h2>
+  <div style="flex:1;display:flex;gap:64px;min-height:0;">
+    <div style="flex:1;display:flex;flex-direction:column;gap:14px;">
+      <p class="bs-note" style="margin:0;">7) NotebookLM: Google에서 AI 기반 문서 요약 및 인사이트 제공 서비스, 이미지 제작 및 슬라이드 제작 기능 존재</p>
+      <p class="bs-note" style="margin:0;color:color-mix(in srgb, var(--color-text) 70%, transparent);">- 평가: 수정의 어려움, 각 슬라이드가 하나의 이미지로 제작, 낮은 품질</p>
+      <div class="imgrow" style="display:flex;gap:16px;flex:1;margin-top:8px;">
+        <img src="./assets/notebooklm.png" alt="notebooklm" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+        <img src="./assets/notebooklm-slide.png" alt="notebooklm-slide" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+      </div>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:14px;">
+      <p class="bs-note" style="margin:0;">8) Caude for PPT: PPT 내에서 Claude Chat을 불러올 수 있는 Claude 서비스</p>
+      <p class="bs-note" style="margin:0;color:color-mix(in srgb, var(--color-text) 70%, transparent);">- 평가: 낮은 품질, 수식 렌더링 문제, 수정 용이, 긴 작업 시간, 원하는 요청사항을 LLM이 제대로 반영하지 못함. 토큰 사용량 문제</p>
+      <img src="./assets/claude-for-ppt.png" alt="claude-for-ppt" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);margin-top:8px;">
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="10 실험 결론 도구">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">3. 실험 결론</h2>
+  <div style="display:flex;flex-direction:column;gap:48px;">
+    <div>
+      <div class="bs-label">▣ 발표도구</div>
+      <ul class="bs-bullets" style="gap:14px;">
+        <li>발표내용 작성: Markdown, LaTeX, HTML</li>
+        <li>AI: Claude Code, Claude Design, 기타 LLM 모델들</li>
+        <li>발표 도구: PPT, HTML</li>
+        <li>PPT: 직접 figure 직접 제작 가능 및 협업이 가능하다. 수정이 용이하다. Power Point 자체가 LLM 친화적이지 않다.</li>
+        <li>HTML: LLM 친화적이다. 토큰 소모가 적고, 작업시간이 적절. 직접 figure를 만들거나 자료 직접 수정에 어려움이 있다.</li>
+      </ul>
+    </div>
+    <div>
+      <div class="bs-label">▣ 개인적인 선택</div>
+      <ul class="bs-bullets" style="gap:14px;">
+        <li>Markdown 발표내용 작성</li>
+        <li>Claude Code를 활용해 HTML 파일로 발표자료 제작</li>
+        <li>figure는 당시의 SOTA 이미지 생성 모델 활용(현재: ChatGPT Image 2.0)</li>
+      </ul>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="11 실험 결론 중요한 점">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">3. 실험 결론</h2>
+  <div class="bs-label">▣ 발표자료 제작 시 중요한 점</div>
+  <ul class="bs-bullets" style="flex:1;justify-content:center;gap:30px;">
+    <li>디자인 시스템을 통해 AI에 요구사항을 명확히 전달한다.</li>
+    <li>폰트 적용이 필요할 경우 폰트 파일을 같이 업로드한다.</li>
+    <li><a href="https://getdesign.md" target="_blank" rel="noopener">getdesign</a></li>
+  </ul>
+  <div class="bs-footnotes">
+    <p class="bs-foot">※ 디자인 시스템: md파일에 자연어로 색상 코드, 디자인 스타일, 요소별 폰트 및 이미지 배치, 레이아웃, 브랜드 컨셉 등을 명시한 파일</p>
+    <p class="bs-foot">※ 디자인 시스템 제작 방법: getdesign.md에서 파일 하나를 선택, 참고할 레퍼런스 이미지나 기존 파일들(3-5개 추천), 테마(미니멀, 팝아트 등), 폰트들을 AI에게 전달하여 입맞에 맞는 디자인 시스템 제작 추천</p>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="12 범용 워크플로우">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">4. 범용 워크플로우</h2>
+  <div style="display:flex;flex-direction:column;gap:16px;">
+    <p class="bs-note" style="margin:0;">(1) 랩미팅 또는 내부회의 같은 반복적이고 디자인의 중요도가 높지 않은 경우</p>
+    <p class="bs-note" style="margin:0;">(2) 수업 발표나 외부에서 임팩트 있게 디자인을 신경써서 만들어야 되는 경우</p>
+  </div>
+  <div style="flex:1;display:flex;gap:56px;margin-top:36px;min-height:0;">
+    <div style="flex:1;display:flex;flex-direction:column;gap:16px;">
+      <img src="./assets/workflow-1.png" alt="1번 워크플로우" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+      <p class="bs-note" style="margin:0;color:color-mix(in srgb, var(--color-text) 70%, transparent);">- 디자인, 사진 배치등을 일부 포기한다.</p>
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:16px;">
+      <img src="./assets/workflow-2.png" alt="2번 워크플로우" style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);">
+      <p class="bs-note" style="margin:0;color:color-mix(in srgb, var(--color-text) 70%, transparent);">- PPT로 변환을 위해 클로드 디자인을 사용한다.</p>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="13 개인 맞춤형 워크플로우">
+<div class="dc-stage bs-slide" style="align-items:center;">
+  <h2 class="bs-title" style="align-self:flex-start;">5. 개인 맞춤형 워크플로우</h2>
+  <div style="flex:1;display:flex;align-items:center;justify-content:center;width:100%;">
+    <img src="./assets/workflow-3.png" alt="최종 워크플로우" style="width:1020px;max-height:640px;object-fit:contain;border-radius:var(--radius-md);">
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="14 배경 목적">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">5. 개인 맞춤형 워크플로우</h2>
+  <div style="display:flex;flex-direction:column;gap:52px;">
+    <div>
+      <div class="bs-label">▣ 배경</div>
+      <ul class="bs-bullets">
+        <li>HTML로 프로젝트 제작 시 폴더형태로 발표자료를 가지고 다녀야되는 불편함 발생</li>
+        <li>매번 폰트, 디자인 시스템, 이미지, 선호하는 발표 제작 규칙 등을 가져와 AI에게 넣어주어야 하는 번거로움 발생</li>
+      </ul>
+    </div>
+    <div>
+      <div class="bs-label">▣ 목적</div>
+      <ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:16px;counter-reset:n;">
+        <li style="font-size:25px;line-height:1.5;padding-left:0.9em;text-indent:-0.9em;"><span style="color:var(--color-accent);">1.</span> 발표 내용만 작성하고 나머지는 AI에게 맡기자.</li>
+        <li style="font-size:25px;line-height:1.5;padding-left:0.9em;text-indent:-0.9em;"><span style="color:var(--color-accent);">2.</span> 디자인을 지속적으로 활용하고 재현 가능하도록 하자.</li>
+        <li style="font-size:25px;line-height:1.5;padding-left:0.9em;text-indent:-0.9em;"><span style="color:var(--color-accent);">3.</span> AI에 의해 발표 내용 원본이 오염되는 것을 방지하자.</li>
+        <li style="font-size:25px;line-height:1.5;padding-left:0.9em;text-indent:-0.9em;"><span style="color:var(--color-accent);">4.</span> 어디서나 편리하게 발표자료를 사용하고, 발표자료들을 아카이빙 하자.</li>
+      </ol>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="15 과정">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">5. 개인 맞춤형 워크플로우</h2>
+  <div class="bs-label">▣ 과정</div>
+  <div style="flex:1;display:flex;flex-direction:column;min-height:0;">
+    <ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px;">
+      <li style="font-size:22px;line-height:1.45;padding-left:1.1em;text-indent:-1.1em;"><span style="color:var(--color-accent);">1.</span> 구현하고자 하는 것에 대해 Claude Code에게 얘기. 및 grill-me 스킬을 통해 원하는 바를 명확히 하여 PRD 초안 작성.</li>
+      <li style="font-size:22px;line-height:1.45;padding-left:1.1em;text-indent:-1.1em;"><span style="color:var(--color-accent);">2.</span> PRD.md 검토 후 수정 등 프로젝트 목적 및 기능 구체화</li>
+      <li style="font-size:22px;line-height:1.45;padding-left:1.1em;text-indent:-1.1em;"><span style="color:var(--color-accent);">3.</span> PLAN.md에 PRD.md에서 작성한 프로젝트 목적 및 기능들 구현 계획 체크리스트 형태로 작성</li>
+      <li style="font-size:22px;line-height:1.45;padding-left:1.1em;text-indent:-1.1em;"><span style="color:var(--color-accent);">4.</span> Claude Code 활용해 구현. 각 단계가 끝나면 체크리스트에 체크 및 검증하도록 지시.</li>
+      <li style="font-size:22px;line-height:1.45;padding-left:1.1em;text-indent:-1.1em;"><span style="color:var(--color-accent);">5.</span> 완성된 프로젝트에 이전에 만들었던 HTML 발표자료들 및 디자인 시스템, 폰트들 이전</li>
+      <li style="font-size:22px;line-height:1.45;padding-left:1.1em;text-indent:-1.1em;"><span style="color:var(--color-accent);">6.</span> Github 리포 연결 및 Vercel을 활용하여 배포</li>
+    </ol>
+    
+      <div style="margin-top:auto;padding-top:20px;display:flex;flex-direction:column;gap:6px;">
+        <p class="bs-foot">※ girll-me 스킬: matt pocock 제작. 애매한 질문을 명확히 하도록 AI가 사용자에게 질의를 통해 원하는 바를 명확히 하는 스킬, https://github.com/mattpocock/skills</p>
+        <p class="bs-foot">※ PRD.md: Product Requirement Document, 무엇을 왜 만들지, 사용자가 누구고 어떻게 쓸지, 핵심 기능이 뭔지, 어떤 기술스택을 사용할건지를 정하는 문서.</p>
+        <p class="bs-foot">※ PLAN.md: PRD에서 바탕으로 실제 구현 수서를 체크리스트화한 문서, 클로드의 작업순서를 정리한 실행계획서</p>
+      </div>
+    
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="16 개별 발표자료 구성">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">5. 개인 맞춤형 워크플로우</h2>
+  <div style="flex:1;display:flex;flex-direction:column;gap:28px;min-height:0;">
+    <div style="display:flex;gap:56px;flex:1;min-height:0;">
+      <div style="flex:1;display:flex;flex-direction:column;">
+        <div class="bs-label">▣ 개별 발표자료 구성</div>
+        <ul class="bs-bullets">
+          <li>assets/: 첨부 이미지, 동영상 등 첨부파일들의 저장위치</li>
+          <li>DRAFT.md: 발표 내용을 작성할 파일, '---'으로 슬라이드를 구분</li>
+          <li>index.html: AI가 만들 실제 발표 자료</li>
+          <li>meta.json: 제목, 제작일자, 테마, 발표 카테고리를 담은 메타데이터 저장 파일</li>
+        </ul>
+      </div>
+      <img src="./assets/draft.png" alt="초안" style="width:620px;flex:none;object-fit:contain;object-position:right top;border-radius:var(--radius-md);margin-left:auto;">
+    </div>
+    <img src="./assets/elements.png" alt="폴더구성" style="height:250px;margin-left:auto;object-fit:contain;object-position:right;border-radius:var(--radius-md);">
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="17 발표자료 제작 방법">
+<div class="dc-stage bs-slide" style="padding:64px 120px;">
+  <h2 class="bs-title" style="font-size:46px;margin-bottom:22px;">5. 개인 맞춤형 워크플로우</h2>
+  <div class="bs-label" style="font-size:25px;margin-bottom:14px;">▣ 발표자료 제작 방법</div>
+  <div style="flex:1;display:flex;gap:48px;min-height:0;">
+    <div style="flex:1;display:flex;flex-direction:column;gap:22px;min-width:0;">
+      <ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:9px;">
+        <li style="font-size:21px;line-height:1.4;padding-left:1.1em;text-indent:-1.1em;"><span style="color:var(--color-accent);">1.</span> 발표 폴더 및 폴더 내 assets폴더와 DRAFT.md 생성</li>
+        <li style="font-size:20px;line-height:1.4;padding-left:2em;text-indent:-0.6em;color:color-mix(in srgb, var(--color-text) 70%, transparent);">- 폴더 구성요소: assets/, DRAFT.md, index.html, meta.json</li>
+        <li style="font-size:21px;line-height:1.4;padding-left:1.1em;text-indent:-1.1em;"><span style="color:var(--color-accent);">2.</span> DRAFT.md에 발표 내용 작성</li>
+        <li style="font-size:21px;line-height:1.4;padding-left:1.1em;text-indent:-1.1em;"><span style="color:var(--color-accent);">3.</span> "/make-labmeeting '@DRAFT.md 파일경로'" → AI Agent가 발표자료 생성 후 배포</li>
+        <li style="font-size:21px;line-height:1.4;padding-left:1.1em;text-indent:-1.1em;"><span style="color:var(--color-accent);">4.</span> 발표자료 확인 후 수정할 사항 일괄 지시 후 확인 과정 반복</li>
+        <li style="font-size:21px;line-height:1.4;padding-left:1.1em;text-indent:-1.1em;"><span style="color:var(--color-accent);">5.</span> 수정했던 내용 디자인 시스템에도 수정사항 반영하여 업데이트</li>
+      </ol>
+      <div>
+        <p class="bs-note" style="margin:0 0 8px;font-size:21px;">- /make-labmeeting 스킬</p>
+        <ol style="list-style:none;margin:0;padding-left:18px;display:flex;flex-direction:column;gap:6px;color:color-mix(in srgb, var(--color-text) 70%, transparent);">
+          <li style="font-size:20px;line-height:1.4;padding-left:1.5em;text-indent:-1.5em;">1) 폴더의 DRAFT.md를 읽고</li>
+          <li style="font-size:20px;line-height:1.4;padding-left:1.5em;text-indent:-1.5em;">2) 랩미팅용 디자인으로 index.html 및 meta.json을 작성</li>
+          <li style="font-size:20px;line-height:1.4;padding-left:1.5em;text-indent:-1.5em;">3) 스크린샷으로 전체 디자인 체크</li>
+          <li style="font-size:20px;line-height:1.4;padding-left:1.5em;text-indent:-1.5em;">4) 자동 배포하는 마크다운 문서로 된 스킬</li>
+        </ol>
+      </div>
+    </div>
+    <div style="width:600px;flex:none;display:flex;flex-direction:column;gap:18px;min-height:0;">
+      <img src="./assets/make-labmeeting.png" alt="스킬" style="flex:1;width:100%;min-height:0;object-fit:contain;border-radius:var(--radius-md);">
+      <img src="./assets/deck-build.png" alt="참고파일" style="flex:1;width:100%;min-height:0;object-fit:contain;border-radius:var(--radius-md);">
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="18 개인화된 워크플로우 · 영상">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">5. 개인 맞춤형 워크플로우</h2>
+  <div style="flex:1;display:flex;flex-direction:column;gap:36px;min-height:0;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      <div class="bs-label" style="margin-bottom:0;">▣ 개인화된 워크플로우</div>
+      <img src="./assets/workflow-3.png" alt="최종 워크플로우" style="height:230px;object-fit:contain;border-radius:var(--radius-md);">
+    </div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:14px;min-height:0;">
+      <div class="bs-label" style="margin-bottom:0;">▣ 프로젝트 사용 영상</div>
+      <div style="display:flex;gap:24px;flex:1;min-height:0;">
+        <video src="./assets/playing.mp4" controls style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);background:#000;"></video>
+        <video src="./assets/prompt.mp4" controls style="flex:1;width:100%;height:100%;object-fit:contain;border-radius:var(--radius-md);"></video>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="19 결론">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">6. 결론</h2>
+  <div style="display:flex;flex-direction:column;gap:22px;">
+    <ul class="bs-bullets">
+      <li>발표 자료를 만드는데 들이는 시간은 비슷</li>
+      <li>프로젝트로 워크플로우를 만들고, 반복적으로 AI에게 요청하는 것들은 스킬로서 저장 및 자동화 해두면 작업 효율성 맟 완성도 증대.</li>
+    </ul>
+    <div style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:17px;line-height:1.6;padding-left:32px;color:color-mix(in srgb, var(--color-text) 80%, transparent);">ex) "DRAFT.md 원문 그대로 발표자료 제작해줘","객체들 정렬과 배치 신경써줘" 등 → /skill-creator를 이용해서 '/verify' 라는 스킬로 제작 → 새롭게 보이는 문제점 스킬에 업데이트 "사진들 테두리 없애주고 /verify 스킬 업데이트해줘." → "/skill-creator 이용해서 /make-labmeeting 스킬을 사용하면 /verify 스킬과 00디자인 시스템 이용해서 발표자료 만들고 배포하는 스킬 만들어줘."</div>
+    <ul class="bs-bullets">
+      <li>클로드 디자인 사용을 위해 발표내용과 관련 파일들, 디자인 시스템 및 폰트, 컨텍스트를 넘겨주기 위한 skill 제작</li>
+    </ul>
+    
+      <p class="bs-foot" style="margin-top:auto;padding-top:16px;">※ skill-creator: /plugin을 통해서 설치 가능하고 클로드에서 공식 지원하는 스킬 제작용 플러그인</p>
+    
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="20 DeepONet 인터랙티브">
+<div class="dc-stage bs-slide" style="padding:70px 120px;">
+  <h2 class="bs-title" style="font-size:50px;margin-bottom:32px;">7. HTML 활용 예시</h2>
+  <div style="flex:1;display:flex;gap:64px;min-height:0;">
+    <div id="don-btns" style="width:280px;flex:none;display:flex;flex-direction:column;gap:22px;"></div>
+    <div style="flex:1;display:flex;flex-direction:column;gap:16px;min-height:0;">
+      <img id="don-img" src="./assets/don-burgers-pred-1-base.png" alt="기본" style="flex:1;width:100%;min-height:0;object-fit:contain;border-radius:var(--radius-md);">
+      <div id="don-label" class="bs-arrow" style="font-size:24px;">기본</div>
+      <div class="bs-footnotes">
+        <p class="bs-foot">※ DeepONet(Burgers, 샘플 i=11) 예측 u_pred(x,t) - 마우스로 설정을 바꿔 결과를 비교할 수 있다.</p>
+        <p class="bs-foot">※ 설정마다 컬러바 범위가 달라 색만으로 직접 비교하기보다 컬러바 눈금을 함께 볼 것.</p>
+      </div>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="21 GCOO 표지 예시">
+<div class="dc-stage" style="position:relative;overflow:hidden;background:var(--color-bg);">
+  <video src="./assets/gemini-gcoo.mp4" autoplay muted loop playsinline style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#000;"></video>
+  <div style="position:absolute;inset:0;background:linear-gradient(to top, color-mix(in srgb, var(--color-bg) 96%, transparent), color-mix(in srgb, var(--color-bg) 55%, transparent) 40%, transparent 66%);"></div>
+  <div style="position:relative;height:100%;display:flex;flex-direction:column;justify-content:flex-end;padding:90px 120px;box-sizing:border-box;color:var(--color-text);">
+    <div style="font-family:var(--font-heading);font-size:20px;letter-spacing:0.05em;color:var(--color-accent-700);margin-bottom:18px;">3D 프린팅과 디자인 사고 · 텀프로젝트</div>
+    <h1 style="font-family:var(--font-heading);font-weight:700;font-size:76px;line-height:1.1;margin:0 0 30px;">GCOO 전기자전거<br>3D 모델링</h1>
+    <div style="display:flex;align-items:baseline;gap:20px;flex-wrap:wrap;font-size:24px;">
+      <span style="color:color-mix(in srgb, var(--color-text) 55%, transparent);">팀원</span>
+      <span>김도형</span><span>·</span><span>김○○</span><span>·</span><span>양○○</span><span>·</span><span>최○○</span><span>·</span><span>최○○</span>
+    </div>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="22 HTML 활용 예시">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">7. HTML 활용 예시</h2>
+  <div style="flex:1;display:flex;align-items:center;">
+    <p style="font-size:34px;line-height:1.5;margin:0;">html 활용한 예시 효과입니다.</p>
+  </div>
+</div>
+</section>
+
+<section class="slide" data-label="22 Appendix">
+<div class="dc-stage bs-slide">
+  <h2 class="bs-title">8. Appendix - 디자인 참고하기 좋은 사이트</h2>
+  <div style="flex:1;display:flex;flex-direction:column;justify-content:center;gap:56px;">
+    <ul class="bs-bullets" style="gap:20px;">
+      <li><a href="https://getdesign.md" target="_blank" rel="noopener">https://getdesign.md</a></li>
+      <li><a href="https://kr.pinterest.com/" target="_blank" rel="noopener">https://kr.pinterest.com/</a></li>
+      <li><a href="https://www.behance.net/" target="_blank" rel="noopener">https://www.behance.net/</a></li>
+      <li><a href="https://dribbble.com/" target="_blank" rel="noopener">https://dribbble.com/</a></li>
+      <li><a href="https://www.awwwards.com/" target="_blank" rel="noopener">https://www.awwwards.com/</a></li>
+    </ul>
+    <ul class="bs-bullets">
+      <li><a href="https://github.com/snake0u0/ppt-workflow" target="_blank" rel="noopener">https://github.com/snake0u0/ppt-workflow</a></li>
+    </ul>
+  </div>
+</div>
+</section>
+      </div>
+    </div>
+
+    <script>
+      // ---- DeepONet 인터랙티브 figure (원본 React 컴포넌트를 바닐라로 대체) ----
+      (function () {
+        var configs = [
+          { label: "기본",       file: "./assets/don-burgers-pred-1-base.png" },
+          { label: "Tanh",      file: "./assets/don-burgers-pred-2-tanh.png" },
+          { label: "node(128)", file: "./assets/don-burgers-pred-3-node128.png" },
+          { label: "lr 1e-4",   file: "./assets/don-burgers-pred-4-lr1e4.png" },
+          { label: "L-BFGS",    file: "./assets/don-burgers-pred-5-lbfgs.png" },
+          { label: "최종",       file: "./assets/don-burgers-pred-6-final.png" }
+        ];
+        var wrap = document.getElementById("don-btns");
+        var img = document.getElementById("don-img");
+        var label = document.getElementById("don-label");
+        if (!wrap || !img || !label) return;
+        var btns = configs.map(function (c, i) {
+          // <button> 이어야 공용 deck-nav.js 가 클릭을 가로채지 않는다
+          var d = document.createElement("button");
+          d.type = "button";
+          d.textContent = c.label;
+          d.addEventListener("click", function (e) { e.stopPropagation(); select(i); });
+          d.addEventListener("mouseenter", function () { select(i); });
+          wrap.appendChild(d);
+          return d;
+        });
+        function select(i) {
+          img.src = configs[i].file;
+          img.alt = configs[i].label;
+          label.textContent = configs[i].label;
+          btns.forEach(function (b, n) { b.classList.toggle("on", n === i); });
+        }
+        // 미리 받아두어 전환이 끊기지 않게
+        configs.forEach(function (c) { var p = new Image(); p.src = c.file; });
+        select(0);
+      })();
+
+      // ---- 슬라이드 전환 / 스케일 (프로젝트 공통 규약) ----
+      (function () {
+        var deck = document.getElementById("deck");
+        var slides = [].slice.call(deck.querySelectorAll(".slide"));
+        var i = 0;
+        function show(n) {
+          i = Math.max(0, Math.min(slides.length - 1, n));
+          slides.forEach(function (s, idx) {
+            var on = idx === i;
+            s.classList.toggle("active", on);
+            // 슬라이드를 벗어나면 영상 정지
+            if (!on) [].forEach.call(s.querySelectorAll("video"), function (v) { if (!v.autoplay) v.pause(); });
+          });
+        }
+        function fit() {
+          var s = Math.min(window.innerWidth / 1280, window.innerHeight / 720);
+          deck.style.transform = "scale(" + s + ")";
+        }
+        window.addEventListener("resize", fit);
+        document.addEventListener("keydown", function (e) {
+          if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); show(i + 1); }
+          else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); show(i - 1); }
+          else if (e.key === "Home") show(0);
+          else if (e.key === "End") show(slides.length - 1);
+        });
+        function fromHash() { var n = parseInt((location.hash || "").slice(1), 10); return isNaN(n) ? 0 : n - 1; }
+        window.addEventListener("hashchange", function () { show(fromHash()); });
+        fit();
+        show(fromHash());
+      })();
+    </script>
+  </body>
+</html>

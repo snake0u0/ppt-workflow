@@ -2,7 +2,7 @@
 
 The Minimal-Navy language is the house style for **lab-meeting (랩미팅) 발표자료** — plain, academic slides that look like a careful graduate student made them in an afternoon, not like a template. It is derived from academic lab-meeting decks: a **flat pure-white** canvas (`{colors.canvas}` — `#FFFFFF`), a single brand color — **brand navy** (`{colors.navy}` — `#024489`) — and text in near-black navy (`{colors.ink}` — `#16213A`). There is no gradient, no card chrome, no accent orange, no sidebar. Restraint is the whole point.
 
-Type is **Pretendard** across the deck — weight, not color or ornament, carries the hierarchy. Titles and section headers are Bold; body is Regular; metadata is muted gray. The navy shows up only in a few deliberate places: the cover's "Lab Meeting" bar, a short vertical bar beside each numbered section header, thin rules and column dividers, and the brand wordmark. Everything else is black text and white space.
+Type is **Pretendard** across the deck — weight, not color or ornament, carries the hierarchy. Titles and section headers are Bold; body is Regular; metadata is muted gray. The navy shows up only in a few deliberate places: the cover's "Lab Meeting" bar, a short vertical bar beside each numbered section header, thin rules, and the brand wordmark. Everything else is black text and white space.
 
 The signature move is a **numbered section header** — a short navy vertical bar + `1. Darcy Flow`, `2. Paper Review - Introduction`, `4. Model Architecture` — sitting over a wide-open white slide with the figures placed plainly, unframed, on the page. Figures are the content; the design gets out of their way.
 
@@ -13,7 +13,7 @@ This is a guide, not a rulebook. It describes how the lab-meeting decks tend to 
 - A flat white canvas. No gradient, no card backgrounds, no drop shadows.
 - Pretendard at every weight; hierarchy from weight and size, not color.
 - Numbered section headers (`1. …`) with a short navy vertical bar, upper-left.
-- Figures placed bare on white — no frames, no rounded cards. Thin navy vertical rules separate multi-figure columns.
+- Figures placed bare on white — no frames, no rounded cards. Figures in a row are separated by white space alone (a comfortable gap) — no rules or lines between them.
 - The brand wordmark top-right on the cover only; content slides carry no logo.
 - Blue underlined links (`{colors.link}` `#1155CC`) for references — the only non-navy color, and only when it's a real hyperlink.
 
@@ -22,7 +22,7 @@ This is a guide, not a rulebook. It describes how the lab-meeting decks tend to 
 The palette is intentionally tiny. If you find yourself reaching for a fifth or sixth hue, the slide is over-designed — pull back.
 
 ### Brand
-- **Navy** (`{colors.navy}` — `#024489`): The single brand color, sampled from the brand wordmark and the decks' "Lab Meeting" bar. Used for the cover bar fill, the section-header vertical bar, thin rules, column dividers, and table header fills. It is *chrome*, not a content fill — never wash a whole card or panel in it.
+- **Navy** (`{colors.navy}` — `#024489`): The single brand color, sampled from the brand wordmark and the decks' "Lab Meeting" bar. Used for the cover bar fill, the section-header vertical bar, thin rules, and table header fills. It is *chrome*, not a content fill — never wash a whole card or panel in it.
 - **Navy Deep** (`{colors.navy-deep}` — `#013666`): Optional darker navy for a large cover title or a pressed state. Use sparingly.
 
 ### Surface
@@ -54,8 +54,8 @@ Code and shape/tensor annotations (e.g. `(500, 1, 17, 16)`) and boxed governing-
 | `{typography.cover-title}` | Bold | 40–52px | 1.2 | Cover slide title (deck name) |
 | `{typography.section-head}` | Bold | 30–34px | 1.2 | Numbered section header (`1. Darcy Flow`) |
 | `{typography.subhead}` | SemiBold | 18–20px | 1.3 | In-slide sub-heading (`연구배경`, `연구목적`) |
-| `{typography.body}` | Regular | 15–17px | 1.6 | Default bullet / body copy |
-| `{typography.body-sub}` | Regular | 13–15px | 1.55 | Nested sub-bullet, secondary detail |
+| `{typography.body}` | Regular | 17–19px | 1.6 | Default bullet / body copy |
+| `{typography.body-sub}` | Regular | 15–16px | 1.55 | Nested sub-bullet, secondary detail |
 | `{typography.caption}` | Regular / Medium | 12–13px | 1.45 | Figure caption, page number, metadata |
 | `{typography.cover-bar}` | Regular | 19–21px | 1.2 | "Lab Meeting" text in the cover bar |
 | `{typography.code}` | Regular | 13px | 1.6 | Code / equation box (D2Coding) |
@@ -76,9 +76,10 @@ Pretendard is open-source and the viewer auto-injects it (`/shared/fonts.css`), 
 - **Base rhythm**: an 8px grid is a comfortable default.
 - **Margins**: generous and even — roughly 64–72px on the sides, 52–60px top/bottom. The white margin *is* the design; when a slide feels tight, cut content before shrinking the margin.
 - **Vertical flow (content slide)**: numbered section header (upper-left) → body column and/or figure(s) → optional page number bottom-right. No eyebrow label, no summary box.
-- **Center the body block, don't pin it to the top.** Below the section header, treat all of a slide's body content (text groups, figures, figure rows, equation call-outs — everything until the bottom margin/footnote) as one block and vertically center that block in the remaining space, rather than letting it start right under the header and leave the leftover room stranded at the bottom. This matters most on slides whose content doesn't fill the canvas: a short bullet list plus one figure row should sit centered between the header and the bottom edge, not stacked flush-top with a dead gap below. Implementation-wise, wrap the body content in a single flex container (`flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: center;`) between the header and any bottom-pinned footnote, so the whole group centers as a unit — don't center each piece independently, which fragments the vertical rhythm.
-- **Two-column split**: a text column (~40–50%) beside a figure (~50–60%) is the workhorse. Multiple figures share a row, separated by thin navy vertical rules.
-- **Group vs. item spacing**: leave a *generous* gap *between* distinct paragraph/label groups on a slide — a `연구배경` block versus the next block, a subhead group versus a following paragraph — roughly **24–28px**. But keep items *within* a single bullet list tight (**~12–16px** between `<li>`s). Space is what separates one idea from the next; it should not loosen a single list into scattered lines. When a slide has several labeled groups stacked vertically, this wider inter-group spacing is what makes it read as calm rather than crammed.
+- **Start the body at the top — don't vertically center it.** Below the section header, the slide's body content (text groups, figures, figure rows, equation call-outs) flows from the top down, starting right under the header, and any leftover room stays as white space at the bottom. This is the author's preference: content reads top-to-bottom in a fixed, predictable position across slides, rather than floating to a different vertical spot depending on how full each slide is. Implementation-wise, the body wrapper between the header and any bottom-pinned footnote uses `flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; justify-content: flex-start;` — footnotes still pin to the bottom edge (`margin-top: auto`), and only figures that are a slide's sole content may stretch to fill the remaining height. **Exception: the TOC slide stays vertically centered** — a short index list pinned to the top reads as unfinished, so the `목차` list keeps `justify-content: center`.
+- **Leave a generous gap between the section header and the first body element** — roughly **44–50px** (author preference, widened twice from an initial ~22px; anything tighter reads as the body "crowding" the title once content starts at the top). The header's bottom margin is where this gap lives; don't reclaim it when a slide gets full.
+- **Two-column split**: a text column (~40–50%) beside a figure (~50–60%) is the workhorse. Multiple figures share a row, separated by white space (a ~16–24px gap) only — no rules between them.
+- **Group vs. item spacing**: leave a *generous* gap *between* distinct paragraph/label groups on a slide — a `연구배경` block versus the next block, a subhead group versus a following paragraph — roughly **32–36px**. Any marker that opens a new content block — a `▣` label, a `1)`/`2)` numbered item heading a new topic — starts a new group and gets this full gap above it (author preference; a new block starting close under the previous text reads as run-on). But keep items *within* a single bullet list tight (**~8–12px** between `<li>`s — the author tightened this from an earlier 12–16px; same goes for consecutive `(1)`/`(2)` self-numbered lines). Space is what separates one idea from the next; it should not loosen a single list into scattered lines. When a slide has several labeled groups stacked vertically, this wider inter-group spacing is what makes it read as calm rather than crammed.
 
 ### Whitespace
 Lean on it. These slides breathe — a single figure and four bullets on an otherwise empty white slide is correct, not underdone. Emptiness reads as academic confidence.
@@ -96,7 +97,7 @@ There is essentially none. This system is deliberately flat.
 | — | 1px `{colors.line}` hairline or thin navy rule | Dividers, table borders, the rule under the cover title |
 | — | Navy fill (`{colors.navy}`) | Cover "Lab Meeting" bar, table header row only |
 
-Do **not** add drop shadows, rounded card containers, or elevated panels. Depth here is the white space itself. If a figure needs separation from adjacent content, use a thin navy vertical rule, not a box.
+Do **not** add drop shadows, rounded card containers, or elevated panels. Depth here is the white space itself. If a figure needs separation from adjacent content, use white space alone — no rule, no box (author preference; earlier versions drew a thin navy vertical rule between side-by-side figures, and it read as clutter).
 
 ## Shapes
 
@@ -108,7 +109,7 @@ The canvas is flat `{colors.canvas}` white. This is the main departure from the 
 
 ### Dividers & Rules
 - **Section rule** (cover): a single thin navy rule (~2px, `{colors.navy}`) under the cover title, roughly the title's width.
-- **Column divider**: a thin **vertical** navy rule (~1–1.5px) between figures placed side by side — the decks' way of grouping related plots without boxing them.
+- **No divider between figures**: figures placed side by side are separated by white space (gap) only. Do **not** draw a navy vertical rule between them — the author removed these; a figure row is grouped by alignment and equal height, not by lines.
 - **Hairline**: `{colors.line}` 1px for table rows or the faintest separators.
 
 ### Image & Figure Handling
@@ -117,7 +118,7 @@ The canvas is flat `{colors.canvas}` white. This is the main departure from the 
 - Keep the original aspect ratio: `object-fit: contain`. Never stretch a plot to fill a slot.
 - **Don't auto-label every figure.** It's tempting to give each image a manufactured academic tag — `Figure 1. Overview`, `Algorithm 2. VRPAgent-GA`, `Prompt 3. Crossover prompt`, `Table 1. Performance` — mechanically derived from a source filename or a markdown image's alt text (`![fig1]`, `![alg2]`, `![table1]`). Once every figure on every slide carries one of these, it reads as clutter, not scholarship — remove it. A figure sits caption-free by default.
 - **Caption only when the content draft itself says something about that image.** If the draft's own text includes a real descriptive line for a specific figure (the author's own sentence, not a label you're inventing), reproduce that verbatim below the figure, centered, in `{colors.ink-mute}` `{typography.caption}` — no invented `Figure N.` / `Table N.` prefix in front of it. If the draft is silent about an image, leave it uncaptioned; the freed space goes to the image itself, not to a manufactured label.
-- When several figures belong to one point, place them in a row at equal height, separated by thin navy vertical rules; caption only the ones the draft actually describes.
+- When several figures belong to one point, place them in a row at equal height, separated by white space only (no rules); caption only the ones the draft actually describes.
 - Full-bleed background images are not part of this system — figures are always content, always `contain`.
 - **Keep scale consistent across a numbered sub-sequence.** When one section spans several slides (see Numbered Section Header above), don't let a slide with little accompanying body text balloon its figure far past its siblings just because there's more empty space to fill — cap the figure's height to roughly the same range the sequence's other slides use, and let any leftover space become extra margin instead of extra image. A hero figure that's dramatically bigger on one slide than the next reads as inconsistency, not emphasis.
 
@@ -152,13 +153,14 @@ The canvas is flat `{colors.canvas}` white. This is the main departure from the 
 **`toc`** — the `목차` page, right after the cover.
 - A plain numbered list, one entry per top-level section (`1. 요약`, `2. 연구 배경 및 관련 연구`, …), each with a bold navy numeral (period included, e.g. `1.` not `1`) and the section title beside it.
 - Keep it minimal, not another headline: smaller and lighter than body bullets elsewhere (e.g. ~19px, Medium — not the ~22px Bold a first pass tends to reach for). The numeral can stay bold/navy since weight there is doing the accenting; the title text itself should be light enough that the page reads as a quiet index, not a second cover.
-- **Give the list room to breathe** — a generous ~20–22px gap between entries, noticeably looser than the ~12–16px used for regular body bullets. A tightly-packed numbered list reads as a dense outline; the TOC should read as a calm, spaced-out index.
+- **Give the list room to breathe** — a generous ~20–22px gap between entries, noticeably looser than the ~8–12px used for regular body bullets. A tightly-packed numbered list reads as a dense outline; the TOC should read as a calm, spaced-out index.
 - **Only pair it with a figure if the content draft supplies one for the TOC slide.** If the draft's `목차` section is text-only (just the numbered outline), keep the slide text-only — a clean, vertically-centered numbered list is complete on its own. Do **not** add a manufactured "representative" figure the draft didn't ask for (a reused cover image, an overview diagram); a text-only TOC is the default, not an unfinished slide.
 
 ### Bullet List
 
 **`bullets`** — the primary body element.
-- Filled round bullets (`•`) in `{colors.ink}` at ~5px, item text in `{colors.body}` `{typography.body}`, ~12–16px vertical gap.
+- Filled round bullets (`•`) in `{colors.ink}` at ~5px, item text in `{colors.body}` `{typography.body}`, ~8–12px vertical gap.
+- **No dot when the line numbers itself.** A draft bullet whose text opens with its own parenthesized counter — `(1) …`, `(2) …` — renders as a plain line without the round bullet marker (author preference; a dot in front of `(1)` double-marks the line). Keep the same body type and spacing, just drop the `•`.
 - **Nested sub-bullets** indent once, drop to `{typography.body-sub}`, and use a smaller or hollow marker. Two levels is plenty; a third means the slide is doing too much.
 - Emphasis words are `{colors.ink}` SemiBold/Bold inline — not a second color.
 
@@ -178,13 +180,13 @@ The canvas is flat `{colors.canvas}` white. This is the main departure from the 
 
 **Placement depends on whether the `※` is attached to an image**, read straight off the draft's markdown:
 - **Grouped under a figure**: if a `![]()` image is *immediately* followed on the very next line by a `※` line (no blank line between them), that `※` block is the image's own note. Keep it directly beneath that figure, tight to it (no extra gap), so it reads as the caption/aside for that specific image and moves with it.
-- **Slide-bottom footnote (the default for everything else)**: any `※` line that is *not* the immediate next line after an image (a standalone aside, or one separated from its image by a blank line) collects into a footnote pinned to the **bottom edge of the slide**. Draw a thin hairline rule above the block (`{colors.line}` `#D7DCE5`, ~1px, partial width, the text column or ~40-50% from the left) for the conventional footnote-separator look, then the `※` lines beneath it. Gather all of a slide's bottom-footnote `※` lines into that single block.
+- **Slide-bottom footnote (the default for everything else)**: any `※` line that is *not* the immediate next line after an image (a standalone aside, or one separated from its image by a blank line) collects into a footnote pinned to the **bottom edge of the slide**. Draw a thin hairline rule above the block (`{colors.line}` `#D7DCE5`, ~1px, partial width, the text column or ~40-50% from the left) for the conventional footnote-separator look, then the `※` lines beneath it. Gather all of a slide's bottom-footnote `※` lines into that single block. **Keep clear air between the body and the footnote**: even when the body runs long, leave a generous gap (~26–30px minimum) above the hairline so the footnote reads as a separate register, not the body's next line (author preference).
 
 ### Figure / Figure Row
 
 **`figure`** — one or more plots on white.
 - Single figure: placed in the free area (commonly the right ~55%), `contain`-fit, caption below only if the draft provides one (see Image & Figure Handling above) — most figures carry no caption at all.
-- Figure row: 2–4 figures at equal height sharing a baseline, each separated by a thin **vertical** `{colors.navy}` rule. No frames, no invented per-figure labels.
+- Figure row: 2–4 figures at equal height sharing a baseline, separated by white space (gap) only — no rule between them. No frames, no invented per-figure labels.
 - Reproduce the source figure as-is (screenshots of papers, matplotlib plots, architecture diagrams all sit bare on white).
 
 ### Equation Call-out
@@ -223,7 +225,7 @@ These habits keep the system recognizable — and keep it from drifting into a "
 
 - **One color.** brand navy for chrome (bar, section bar, rules, dividers, table headers); black ink for text; blue only for real links. No orange, no second brand hue.
 - **Flat white, always.** No gradient, no card backgrounds, no drop shadows.
-- **Figures bare on white.** No frames or rounded cards. Separate a figure row with thin navy vertical rules, not boxes.
+- **Figures bare on white.** No frames or rounded cards. Separate a figure row with white space alone — no rules, no boxes.
 - **Weight for hierarchy.** Bold the header and the keyword; don't recolor to emphasize.
 - **Logo on the cover only.** Content slides stay clean.
 - **When in doubt, remove.** Empty white space is the intended look, not a gap to fill.
@@ -250,5 +252,5 @@ A loose order of operations, not a checklist to clear:
 2. For each content slide, drop the numbered `section-head` upper-left, then lay the text column and figure(s) in the open white.
 3. Default body to `{typography.body}`; sub-heads to `{typography.subhead}`; captions to `{colors.ink-mute}`.
 4. Keep the navy scarce — bar, section bar, rules, dividers, table headers. Nothing else navy.
-5. Place figures bare on white at true aspect ratio; separate rows with thin navy vertical rules. Leave them uncaptioned unless the draft itself has a descriptive line for that image — don't invent `Figure N.` / `Table N.` labels.
+5. Place figures bare on white at true aspect ratio; separate figures in a row with white space only. Leave them uncaptioned unless the draft itself has a descriptive line for that image — don't invent `Figure N.` / `Table N.` labels.
 6. Do a visual pass (PDF or screenshots) for overlap, ragged figure rows, and Korean wrapping — then delete anything that looks decorative.
